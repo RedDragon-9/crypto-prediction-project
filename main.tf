@@ -249,7 +249,7 @@ data "aws_route53_zone" "primary" {
 
 # Links your custom subdomain target down into the active AWS App Runner instance
 resource "aws_apprunner_custom_domain_association" "app_domain" {
-  service_arn          = aws_apprunner_service.flask_app.service_arn
+  service_arn          = aws_apprunner_service.flask_app.arn
   domain_name          = var.app_subdomain_name # Securely generalized input
   enable_www_subdomain = false
 }
