@@ -211,7 +211,7 @@ resource "aws_apprunner_service" "flask_app" {
       
       image_configuration {
         port = "5000" # Exposes your Flask application port map
-        environment_variables = {
+        runtime_environment_variables = {
           DB_HOST     = aws_db_instance.mysql_db.address
           DB_USER     = "db_master_admin"
           DB_PASSWORD = random_password.db_password.result
