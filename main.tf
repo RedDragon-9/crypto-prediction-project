@@ -199,7 +199,15 @@ resource "aws_apprunner_vpc_connector" "vpc_connector" {
 # Provision the live public web server service on AWS App Runner
 resource "aws_apprunner_service" "flask_app" {
   service_name = "crypto-prediction-service"
-
+  
+  instance_configuration {
+    environment_variables = {
+      DB_HOST     = aws_db_instance.mysql_db.address
+      DB_USER     = "db_master_admin"
+      DB_PASSWORD = random_password.db_password.result
+      DB_NAME     = "bitcoin"
+    }
+  }
   source_configuration {
     authentication_configuration {
       access_role_arn = aws_iam_role.apprunner_ecr_role.arn
@@ -212,14 +220,6 @@ resource "aws_apprunner_service" "flask_app" {
       image_configuration {
         port = "5000" # Exposes your Flask application port map
         
-        # --- AUTOMATED ENVIRONMENT INJECTION ---
-        # Bridges your infrastructure resource credentials straight down to Main.py!
-        environment_variables = {
-          DB_HOST     = split(":", aws_db_instance.mysql_db.endpoint)[0]
-          DB_USER     = "db_master_admin"
-          DB_PASSWORD = random_password.db_password.result
-          DB_NAME     = "bitcoin"
-        }
       }
     }
     auto_deployments_enabled = true
