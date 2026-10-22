@@ -1,0 +1,53 @@
+name: Production IaC and Application Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  infrastructure-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Application Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform Engine
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false # Ensures clean console logging strings
+
+      - name: Authenticate with AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} # Pulled securely from GitHub Secrets
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
+      - name: Execute Terraform Plan & Apply
+        id: terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve
+        env:
+          # Reads individual domain layouts from repository configurations to keep the main.tf anonymous
+          TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
+          TF_VAR_app_subdomain_name: ${{ secrets.MY_SUBDOMAIN }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Execute Managed Docker Build and Image Push
+        run: |
+          ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          REPO_NAME="crypto-prediction-app"
+          TARGET_URL="$ECR_REGISTRY/$REPO_NAME:latest"
+
+          # Build your security-hardened container using the non-root USER mapping
+          docker build -t $REPO_NAME:latest .
+
+          # Tag and push the asset container directly into your infrastructure repository
+          docker tag $REPO_NAME:latest $TARGET_URL
+          docker push $TARGET_URL

@@ -1,0 +1,135 @@
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="text/javascript">
+    window.history.forward();
+    function noBack() { 
+        window.history.forward(); 
+    }
+    if (window.performance && window.performance.navigation.type === window.performance.navigation.TYPE_BACK_FORWARD) {
+        window.location.href = "/index";
+    }
+</script>
+<title>Ethereum & Bitcoin Price Predictor</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<style>
+body {
+  background-image: url({{ url_for('static', filename='images/back.jpg') }});
+}
+</style>
+<body onload="noBack();" onpageshow="if (event.persisted) noBack();" onunload="">
+<div id="wrapper">
+	<div id="header">
+		<div id="logo">
+			<center><font size="4" color="white">Bitcoin & Ethereum Price Predictor</font></center></font>
+		</div>
+		<div id="slogan">
+			
+		</div>
+	</div>
+	<div id="menu">
+		<ul><center>
+                
+        <li>
+            <form id="predictForm" method="post" action="/PredictPrices" style="display: inline;">
+            <a href="#" onclick="document.getElementById('predictForm').submit(); return false;" style="color: black; text-decoration: none; font-size: 1.25em; letter-spacing: -1px;">
+             Forecast Stock Prices
+            </a>
+            </form>
+        </li>
+	     <li><a href="index"><font size="" color="black">Logout</font></a></font></li>	
+		</center></ul>
+		<br class="clearfix" />
+	</div>
+	<div id="splash">
+		<img class="pic" src={{ url_for('static', filename='images/investor.jpg') }} width="870" height="230" alt="" />
+	</div>
+{% if labels and prices %}
+	<div style="width: 80%; margin: auto;">
+    <canvas id="priceChart"></canvas>
+</div>
+
+
+<canvas id="myChart"></canvas>
+<script>
+    const labels = {{ labels | tojson }};
+    const prices = {{ prices | tojson }};
+
+    const ctx = document.getElementById('myChart').getContext('2d');
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '{{ coin }} Price Prediction',
+                data: prices,
+                fill: false,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '{{ coin }} Price Prediction Over Time',
+                    font: { size: 18 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Price: $' + context.raw.toFixed(2);
+                        }
+                    }
+                },
+                zoom: {
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'x',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Price (USD)'
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endif %}
+
+	<div style="text-align: center; margin-top: 20px; padding: 20px; background: #f0f8ff; border-radius: 10px; width: 80%; margin-left: auto; margin-right: auto; font-size: 18px; font-weight: bold; color: #333; overflow-x: auto;">
+
+    {{ data|safe }}
+</div>
+
+		<img src="data:image/png;base64, {{ img }}" alt="" />
+
+	
+</body>
+</html>

@@ -1,0 +1,104 @@
+<html>
+<head>
+<title>Ethereum & Bitcoin Price Prediction</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+ <script LANGUAGE="Javascript" >
+function validate(){
+	var x=document.forms["f1"]["t1"].value;
+	var y=document.forms["f1"]["t2"].value;
+	
+	if(x == null || x==""){
+		window.alert("Username must be entered");
+		document.f1.username.focus();
+		return false;
+	}
+	if(y == null || y==""){
+		window.alert("Password must be entered");
+		document.f1.password.focus();
+		return false;
+	}
+	return true;
+}
+</script>
+</head>
+<style>
+body {
+  background-image: url({{ url_for('static', filename='images/back.jpg') }});
+}
+</style>
+<body>
+<div id="wrapper">
+	<div id="header">
+		<div id="logo">
+			<center><font size="4" color="white">Bitcoin & Ethereum Price Predictor</font></center></font>
+		</div>
+		<div id="slogan">
+			
+		</div>
+	</div>
+	<div id="menu">
+		<ul><center>
+	  <ul><center>
+		<li><a href="PredictPrices"><font size="" color="black">Forecast Stock Prices</font></a></font></li>
+	     <li><a href="index"><font size="" color="black">Logout</font></a></font></li>	
+		</center></ul>
+<br class="clearfix" />
+				</div>
+			
+	<div id="splash">
+		<img class="pic" src={{ url_for('static', filename='images/investor.jpg') }} width="870" height="230" alt="" />
+	</div>	
+			<center>
+<form name="f1" method="post" action="/PredictPricesAction" OnSubmit="return validate()">
+	<br/>
+   <h3 style="text-align: center; color: #333; margin-bottom: 20px;">
+    <b>Future Stock Prices Forecasting Screen</b>
+</h3>
+
+<div style="text-align: center; color: black; margin-bottom: 25px;">
+    {{ data }}
+</div>
+
+<table align="center" style="
+    background-color: #f9f9f9;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    padding: 30px 40px;
+">
+    <tr>
+        <td style="padding: 15px; font-weight: bold; color: #333;">Choose Stock Symbol</td>
+        <td style="padding: 15px;">
+            <select name="t1" style="padding: 8px 12px; font-family: Comic Sans MS; border-radius: 6px; border: 1px solid #ccc; width: 180px;">
+                <option value="Bitcoin">Bitcoin</option>
+                <option value="ETH">ETH</option>
+            </select>
+        </td>
+    </tr>
+
+    <tr>
+        <td style="padding: 15px; font-weight: bold; color: #333;">Choose Forecast Tenure</td>
+        <td style="padding: 15px;">
+            <select name="t2" style="padding: 8px 12px; font-family: Comic Sans MS; border-radius: 6px; border: 1px solid #ccc; width: 180px;">
+                <option value="7">1 Week</option>
+                <option value="30">1 Month</option>
+                <option value="90">3 Months</option>
+                <option value="180">6 Months</option>
+            </select>
+        </td>
+    </tr>
+
+    <tr>
+        <td colspan="2" style="text-align: center; padding: 25px;">
+            <input type="submit" value="Predict" style="padding: 12px 24px; background-color: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+        </td>
+    </tr>
+</table>
+
+			<br/><br/><br/><br/>
+				</div>	
+					
+				</div>
+				
+	</body>
+</html>

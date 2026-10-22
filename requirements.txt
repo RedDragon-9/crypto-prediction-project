@@ -1,0 +1,9 @@
+flask 
+yfinance 
+pymysql 
+pandas 
+numpy 
+scikit-learn 
+requests 
+lxml 
+html5lib

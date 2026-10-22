@@ -1,0 +1,93 @@
+<html>
+<head>
+<title>Ethereum & Bitcoin Price Prediction</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+ <script LANGUAGE="Javascript" >
+function validate(){
+	var x=document.forms["f1"]["t1"].value;
+	var y=document.forms["f1"]["t2"].value;
+	
+	if(x == null || x==""){
+		window.alert("Username must be entered");
+		document.f1.username.focus();
+		return false;
+	}
+	if(y == null || y==""){
+		window.alert("Password must be entered");
+		document.f1.password.focus();
+		return false;
+	}
+	return true;
+}
+</script>
+</head>
+<style>
+body {
+  background-image: url({{ url_for('static', filename='images/back.jpg') }});
+}
+</style>
+<body>
+<div id="wrapper">
+	<div id="header">
+		<div id="logo">
+			<center><font size="4" color="white">Bitcoin & Ethereum Price Predictor</font></center></font>
+		</div>
+		<div id="slogan">
+			
+		</div>
+	</div>
+	<div id="menu">
+		<ul><center>
+	  <ul><center>
+	  <li><a href="index"><font size="" color="black">Home</a></font></li>
+      <li><a href="UserLogin"><font size="" color="black">User Login</a></li>
+     <li><a href="Register"><font size="" color="black">New User Registration</a></li>		
+		</center></ul>
+<br class="clearfix" />
+				</div>
+			
+	<div id="splash">
+		<img class="pic" src={{ url_for('static', filename='images/investor.jpg') }} width="870" height="230" alt="" />
+	</div>	
+			<center>
+<form name="f1" method="post" action="/UserLoginAction" OnSubmit="return validate()">
+	<br/>
+   <h3 style="text-align: center; color: #333; margin-bottom: 20px;"><b>User Login Screen</b></h3>
+
+<div style="text-align: center; color: black; margin-bottom: 25px;">
+    {{ data }}
+</div>
+
+<table align="center" style="
+    background-color: #f9f9f9;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    padding: 30px 40px;
+">
+    <tr>
+        <td style="padding: 15px; color: #333; font-weight: bold;">Username</td>
+        <td style="padding: 15px;">
+            <input type="text" name="t1" style="font-family: Comic Sans MS; width: 250px; padding: 10px; border-radius: 6px; border: 1px solid #ccc;" required>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding: 15px; color: #333; font-weight: bold;">Password</td>
+        <td style="padding: 15px;">
+            <input type="password" name="t2" style="font-family: Comic Sans MS; width: 250px; padding: 10px; border-radius: 6px; border: 1px solid #ccc;" required>
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2" style="text-align: center; padding: 20px;">
+            <input type="submit" value="Login" style="padding: 12px 24px; background-color: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+        </td>
+    </tr>
+</table>
+
+			<br/><br/><br/><br/>
+				</div>	
+					
+				</div>
+				
+	</body>
+</html>
