@@ -25,15 +25,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      - name: Execute Terraform Plan & Apply
-        id: terraform
+      # Step 1: Tell Terraform to first isolate and deploy ONLY the Core App Compute + DB infrastructure
+      - name: Deploy Core Infrastructure Tier (Targeted Apply)
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform apply -target=aws_apprunner_service.flask_app -auto-approve
         env:
-          # Reads individual domain layouts from repository configurations to keep the main.tf anonymous
           TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
           TF_VAR_app_subdomain_name: ${{ secrets.MY_SUBDOMAIN }}
+
+      # Step 2: Now that App Runner is active and your SSL keys are known, run a standard complete apply
+      - name: Converge and Deploy Routing Tier (Full Apply)
+        run: |
+          terraform apply -auto-approve
+        env:
+          TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
+          TF_VAR_app_subdomain_name: ${{ secrets.MY_SUBDOMAIN }}
+
 
       - name: Login to Amazon ECR
         id: login-ecr
