@@ -16,33 +16,25 @@ jobs:
       - name: Setup Terraform Engine
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_wrapper: false # Ensures clean console logging strings
+          terraform_wrapper: false
 
       - name: Authenticate with AWS CLI
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} # Pulled securely from GitHub Secrets
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      # Step 1: Tell Terraform to first isolate and deploy ONLY the Core App Compute + DB infrastructure
-      - name: Deploy Core Infrastructure Tier (Targeted Apply)
+      # Provision all underlying architecture, load balancing routing, and SSL verification layers in a single pass
+      - name: Provision Core Infrastructure Layers
         run: |
           terraform init
-          terraform apply -target=aws_apprunner_service.flask_app -auto-approve
-        env:
-          TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
-          TF_VAR_app_subdomain_name: ${{ secrets.MY_SUBDOMAIN }}
-
-      # Step 2: Now that App Runner is active and your SSL keys are known, run a standard complete apply
-      - name: Converge and Deploy Routing Tier (Full Apply)
-        run: |
           terraform apply -auto-approve
         env:
           TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
           TF_VAR_app_subdomain_name: ${{ secrets.MY_SUBDOMAIN }}
 
-
+      # Build and push steps
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -53,9 +45,17 @@ jobs:
           REPO_NAME="crypto-prediction-app"
           TARGET_URL="$ECR_REGISTRY/$REPO_NAME:latest"
 
-          # Build your security-hardened container using the non-root USER mapping
+          # Build container using standard rules
           docker build -t $REPO_NAME:latest .
 
-          # Tag and push the asset container directly into your infrastructure repository
+          # Tag and push container directly into your infrastructure repository
           docker tag $REPO_NAME:latest $TARGET_URL
           docker push $TARGET_URL
+
+      # Force ECS Fargate cluster tasks to download and launch the new image deployment layer
+      - name: Force Deploy Application Update to ECS Cluster
+        run: |
+          aws ecs update-service \
+            --cluster crypto-production-cluster \
+            --service crypto-prediction-service \
+            --force-new-deployment

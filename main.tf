@@ -26,14 +26,13 @@ variable "root_domain_name" {
 
 variable "app_subdomain_name" {
   type        = string
-  description = "The full custom address where the app will be accessed (e.g., ://example.com)"
+  description = "The full custom address where the app will be accessed (e.g., example.com)"
 }
 
 # =================================================================
-# 1. SECURITY & PASSSWORD ORCHESTRATION
+# 1. SECURITY & PASSWORD ORCHESTRATION
 # =================================================================
 
-# Dynamically generate a high-entropy password for the private database layer
 resource "random_password" "db_password" {
   length           = 16
   special          = true
@@ -44,28 +43,60 @@ resource "random_password" "db_password" {
 # 2. NETWORK PROVISIONING (VPC & PRIVATE SUBNETS)
 # =================================================================
 
-# Create a dedicated, completely isolated Virtual Private Cloud network
 resource "aws_vpc" "app_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   tags                 = { Name = "crypto-production-vpc" }
 }
 
-# Create Private Subnet A for the database engine cluster
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.app_vpc.id
+}
+
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.app_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "eu-north-1a"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.app_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "eu-north-1b"
+  map_public_ip_on_launch = true
+}
+
 resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.app_vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "eu-north-1a" # Assigned to Sweden Zone A
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "eu-north-1a"
 }
 
-# Create Private Subnet B (AWS RDS requires at least 2 subnets across different zones)
 resource "aws_subnet" "private_b" {
   vpc_id            = aws_vpc.app_vpc.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "eu-north-1b" # Assigned to Sweden Zone B
+  cidr_block        = "10.0.4.0/24"
+  availability_zone = "eu-north-1b"
 }
 
-# Bind the subnets together into a deployment group for the database cluster
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.app_vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+
+resource "aws_route_table_association" "pub_assoc_a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "pub_assoc_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
 resource "aws_db_subnet_group" "db_subnets" {
   name       = "crypto-db-subnet-group"
   subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
@@ -75,16 +106,23 @@ resource "aws_db_subnet_group" "db_subnets" {
 # 3. FIREWALL SECURITY POLICIES (SECURITY GROUPS)
 # =================================================================
 
-# Database Firewall: ONLY allows traffic traveling internally from within the VPC network
-resource "aws_security_group" "db_sg" {
-  name   = "crypto-private-db-sg"
+# Load Balancer Firewall: Accepts public traffic on HTTP (80) and HTTPS (443)
+resource "aws_security_group" "alb_sg" {
+  name   = "crypto-alb-sg"
   vpc_id = aws_vpc.app_vpc.id
 
   ingress {
-    from_port   = 3306
-    to_port     = 3306
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"] # Restricted strictly to your internal VPC traffic
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -95,10 +133,37 @@ resource "aws_security_group" "db_sg" {
   }
 }
 
-# App Connector Firewall: Allows the App Runner web container to bridge cleanly into your VPC
-resource "aws_security_group" "app_connector_sg" {
-  name   = "crypto-app-connector-sg"
+# ECS Tasks Firewall: Only accepts traffic routed from the ALB to your Flask application port
+resource "aws_security_group" "ecs_tasks_sg" {
+  name   = "crypto-ecs-tasks-sg"
   vpc_id = aws_vpc.app_vpc.id
+
+  ingress {
+    from_port       = 5000
+    to_port         = 5000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Database Firewall: ONLY allows traffic traveling internally from the ECS compute tier
+resource "aws_security_group" "db_sg" {
+  name   = "crypto-private-db-sg"
+  vpc_id = aws_vpc.app_vpc.id
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_tasks_sg.id]
+  }
 
   egress {
     from_port   = 0
@@ -112,20 +177,19 @@ resource "aws_security_group" "app_connector_sg" {
 # 4. PRIVATELY HIDDEN DATABASE LAYER (AWS RDS)
 # =================================================================
 
-# Provision the Managed Free-Tier MySQL Database Engine
 resource "aws_db_instance" "mysql_db" {
   identifier             = "crypto-production-db"
   allocated_storage      = 20
   max_allocated_storage  = 20
   engine                 = "mysql"
   engine_version         = "8.0"
-  instance_class         = "db.t3.micro" # AWS Free-Tier eligible
+  instance_class         = "db.t3.micro"
   db_name                = "bitcoin"
   username               = "db_master_admin"
   password               = random_password.db_password.result
   parameter_group_name   = "default.mysql8.0"
   skip_final_snapshot    = true
-  publicly_accessible    = false 
+  publicly_accessible    = false
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
 }
@@ -134,7 +198,6 @@ resource "aws_db_instance" "mysql_db" {
 # 5. CONTAINER REGISTRY PROVISIONING & STORAGE CONTROL (AWS ECR)
 # =================================================================
 
-# Create a private registry to store your security-hardened Docker images
 resource "aws_ecr_repository" "app_ecr" {
   name                 = "crypto-prediction-app"
   image_tag_mutability = "MUTABLE"
@@ -145,8 +208,6 @@ resource "aws_ecr_repository" "app_ecr" {
   }
 }
 
-# COST OPTIMIZATION CONTROL: Enforces a policy that keeps only 1 active image version.
-# Automatically purges old builds to ensure new accounts remain inside Free Tier space limits.
 resource "aws_ecr_lifecycle_policy" "ecr_cleanup_policy" {
   repository = aws_ecr_repository.app_ecr.name
 
@@ -167,12 +228,15 @@ resource "aws_ecr_lifecycle_policy" "ecr_cleanup_policy" {
 }
 
 # =================================================================
-# 6. APPLICATION COMPUTE PROVISIONING (AWS APP RUNNER)
+# 6. APPLICATION COMPUTE PROVISIONING (AMAZON ECS FARGATE)
 # =================================================================
 
-# Create the IAM Role that allows App Runner to read images from your ECR repo
-resource "aws_iam_role" "apprunner_ecr_role" {
-  name = "apprunner-ecr-access-role"
+resource "aws_ecs_cluster" "main" {
+  name = "crypto-production-cluster"
+}
+
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "crypto-ecs-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -184,112 +248,204 @@ resource "aws_iam_role" "apprunner_ecr_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "apprunner_ecr_policy" {
-  role       = aws_iam_role.apprunner_ecr_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Private Network Bridge: Establishes a communication connector tunnel into the private subnet VPC
-resource "aws_apprunner_vpc_connector" "vpc_connector" {
-  vpc_connector_name = "crypto-app-vpc-connector"
-  subnets            = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  security_groups    = [aws_security_group.app_connector_sg.id]
+resource "aws_cloudwatch_log_group" "ecs_logs" {
+  name              = "/ecs/crypto-prediction-app"
+  retention_in_days = 7
 }
 
-# Provision the live public web server service on AWS App Runner
-resource "aws_apprunner_service" "flask_app" {
-  service_name = "crypto-prediction-service"
-  
-  source_configuration {
-    authentication_configuration {
-      access_role_arn = aws_iam_role.apprunner_ecr_role.arn
-    }
-    
-    image_repository {
-      image_identifier      = "${aws_ecr_repository.app_ecr.repository_url}:latest"
-      image_repository_type = "ECR"
-      
-      image_configuration {
-        port = "5000" # Exposes your Flask application port map
-        runtime_environment_variables = {
-          DB_HOST     = aws_db_instance.mysql_db.address
-          DB_USER     = "db_master_admin"
-          DB_PASSWORD = random_password.db_password.result
-          DB_NAME     = "bitcoin"
-        }
+resource "aws_ecs_task_definition" "app" {
+  family                   = "crypto-prediction-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+
+  container_definitions = jsonencode([{
+    name      = "flask-app"
+    image     = "${aws_ecr_repository.app_ecr.repository_url}:latest"
+    essential = true
+    portMappings = [{
+      containerPort = 5000
+      hostPort      = 5000
+    }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.ecs_logs.name
+        "awslogs-region"        = "eu-north-1"
+        "awslogs-stream-prefix" = "ecs"
       }
     }
-    auto_deployments_enabled = true
-  }
-
-  # Link the application container directly into the private network tunnel
-  network_configuration {
-    egress_configuration {
-      egress_type       = "VPC"
-      vpc_connector_arn = aws_apprunner_vpc_connector.vpc_connector.arn
-    }
-  }
-
-  depends_on = [
-    aws_db_instance.mysql_db,
-    aws_ecr_repository.app_ecr,
-    aws_apprunner_vpc_connector.vpc_connector
-  ]
+    environment = [
+      { name = "DB_HOST", value = aws_db_instance.mysql_db.address },
+      { name = "DB_USER", value = "db_master_admin" },
+      { name = "DB_PASSWORD", value = random_password.db_password.result },
+      { name = "DB_NAME", value = "bitcoin" }
+    ]
+  }])
 }
 
 # =================================================================
-# 7. ROUTE 53 AUTOMATION & CUSTOM DOMAIN PROVISIONING
+# 6b. NETWORKING LOAD BALANCER LAYER (ALB)
 # =================================================================
 
-# Pulls your primary pre-existing Route 53 zone records map setup context safely using input variables
+resource "aws_alb" "main" {
+  name            = "crypto-app-alb"
+  subnets         = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  security_groups = [aws_security_group.alb_sg.id]
+}
+
+resource "aws_alb_target_group" "app" {
+  name        = "crypto-app-target-group"
+  port        = 5000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.app_vpc.id
+  target_type = "ip"
+
+  health_check {
+    healthy_threshold   = "3"
+    interval            = "30"
+    protocol            = "HTTP"
+    matcher             = "200"
+    path                = "/"
+    unhealthy_threshold = "2"
+  }
+}
+
+# HTTP Listener - Automated 301 Permanent Redirect to safe HTTPS
+resource "aws_alb_listener" "http" {
+  load_balancer_arn = aws_alb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+# HTTPS Listener - Handles secure 443 handshake using verified ACM SSL cert
+resource "aws_alb_listener" "https" {
+  load_balancer_arn = aws_alb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate_validation.app_cert_verify.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_alb_target_group.app.arn
+  }
+}
+
+# =================================================================
+# 6c. RUNNING LIVE ECS SERVICE
+# =================================================================
+
+resource "aws_ecs_service" "main" {
+  name            = "crypto-prediction-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    security_groups  = [aws_security_group.ecs_tasks_sg.id]
+    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_alb_target_group.app.arn
+    container_name   = "flask-app"
+    container_port   = 5000
+  }
+
+  depends_on = [aws_alb_listener.https, aws_db_instance.mysql_db]
+}
+
+# =================================================================
+# 7. ROUTE 53 AUTOMATION & SSL CERTIFICATE PROVISIONING
+# =================================================================
+
 data "aws_route53_zone" "primary" {
-  name         = "${var.root_domain_name}." # Dynamically appends the trailing dot safely
+  name         = "${var.root_domain_name}."
   private_zone = false
 }
 
-# Links your custom subdomain target down into the active AWS App Runner instance
-resource "aws_apprunner_custom_domain_association" "app_domain" {
-  service_arn          = aws_apprunner_service.flask_app.arn
-  domain_name          = var.app_subdomain_name # Securely generalized input
-  enable_www_subdomain = false
+# Request a free SSL certificate from AWS Certificate Manager
+resource "aws_acm_certificate" "app_cert" {
+  domain_name       = var.app_subdomain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Loop Automation: Writes out CNAME security validation records into Route 53 automatically for SSL activation
-resource "aws_route53_record" "apprunner_validation" {
+# Generate DNS validation handshake records in Route 53
+resource "aws_route53_record" "cert_validation" {
   for_each = {
-    for record in aws_apprunner_custom_domain_association.app_domain.certificate_validation_records : record.name => record
+    for dvo in aws_acm_certificate.app_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
   }
 
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 300
-  records = [each.value.value]
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.primary.zone_id
 }
 
-# Final Traffic Routing Alias Record: Connects your subdomain target to the App Runner runtime proxy gateway
+# Explicitly wait until AWS confirms the SSL certificate is fully validated and active
+resource "aws_acm_certificate_validation" "app_cert_verify" {
+  certificate_arn         = aws_acm_certificate.app_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+# Custom Traffic Routing Alias Record: Connects your subdomain directly to the public ALB
 resource "aws_route53_record" "app_alias" {
   zone_id = data.aws_route53_zone.primary.zone_id
-  name    = var.app_subdomain_name # Securely generalized input
-  type    = "CNAME"
-  ttl     = 300
-  records = [aws_apprunner_custom_domain_association.app_domain.dns_target]
+  name    = var.app_subdomain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_alb.main.dns_name
+    zone_id                = aws_alb.main.zone_id
+    evaluate_target_health = true
+  }
 }
 
 # =================================================================
 # 8. MANAGEMENT DATA OUTPUT CONTROLS
 # =================================================================
 
-output "app_url" {
-  value       = aws_apprunner_service.flask_app.service_url
-  description = "The direct internal AWS HTTPS URL gateway provided to access your web framework"
+output "alb_dns_name" {
+  value       = aws_alb.main.dns_name
+  description = "The public DNS endpoint URL of the Application Load Balancer"
 }
 
 output "custom_domain_url" {
-value       = "https://${aws_apprunner_custom_domain_association.app_domain.domain_name}"
-description = "Your live web application access custom domain endpoint link address"
+  value       = "https://${var.app_subdomain_name}"
+  description = "Your live web application access custom domain endpoint link address"
 }
+
 output "ecr_repository_url" {
-value       = aws_ecr_repository.app_ecr.repository_url
-description = "The target ECR repository URL endpoint for image tagging steps"
+  value       = aws_ecr_repository.app_ecr.repository_url
+  description = "The target ECR repository URL endpoint for image tagging steps"
 }
