@@ -29,6 +29,7 @@ jobs:
       - name: Provision Core Infrastructure Layers
         run: |
           terraform init
+          terraform import aws_db_subnet_group.db_subnets crypto-db-subnet-group || true
           terraform apply -auto-approve
         env:
           TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}
