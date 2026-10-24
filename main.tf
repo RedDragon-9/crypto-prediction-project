@@ -367,8 +367,8 @@ resource "aws_ecs_service" "main" {
 
   network_configuration {
     security_groups  = [aws_security_group.ecs_tasks_sg.id]
-    subnets          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-    assign_public_ip = false
+    subnets          = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    assign_public_ip = true
   }
 
   load_balancer {
