@@ -9,6 +9,11 @@ terraform {
       version = "~> 3.0"
     }
   }
+  backend "s3" {
+    bucket = "crypto-prediction-tfstate-017562255734"
+    key    = "production/ecs-express/terraform.tfstate"
+    region = "eu-north-1"
+  }
 }
 
 provider "aws" {
@@ -396,26 +401,20 @@ resource "aws_acm_certificate" "app_cert" {
 
 # Generate DNS validation handshake records in Route 53
 resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.app_cert.domain_validation_options : var.app_subdomain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
+  count = 1
 
   allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
+  name            = tolist(aws_acm_certificate.app_cert.domain_validation_options)[0].resource_record_name
+  records         = [tolist(aws_acm_certificate.app_cert.domain_validation_options)[0].resource_record_value]
   ttl             = 60
-  type            = each.value.type
+  type            = tolist(aws_acm_certificate.app_cert.domain_validation_options)[0].resource_record_type
   zone_id         = data.aws_route53_zone.primary.zone_id
 }
 
 # Explicitly wait until AWS confirms the SSL certificate is fully validated and active
 resource "aws_acm_certificate_validation" "app_cert_verify" {
   certificate_arn         = aws_acm_certificate.app_cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+  validation_record_fqdns = [aws_route53_record.cert_validation[0].fqdn]
 }
 
 # Custom Traffic Routing Alias Record: Connects your subdomain directly to the public ALB

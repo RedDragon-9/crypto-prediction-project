@@ -25,11 +25,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
+      - name: Bootstrap Core Remote State Storage Tier
+        run: |
+          aws s3api create-bucket \
+            --bucket crypto-prediction-tfstate-017562255734 \
+            --region eu-north-1 \
+            --create-bucket-configuration LocationConstraint=eu-north-1 || true
+
       # Provision all underlying architecture, load balancing routing, and SSL verification layers in a single pass
       - name: Provision Core Infrastructure Layers
         run: |
           terraform init
-          terraform import aws_db_subnet_group.db_subnets crypto-db-subnet-group || true
           terraform apply -auto-approve
         env:
           TF_VAR_root_domain_name: ${{ secrets.MY_ROOT_DOMAIN }}

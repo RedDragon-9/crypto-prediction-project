@@ -1,6 +1,4 @@
-This is live currently on crypto.reddragon09.in
-
-#If its not live before 9AM or after 10PM, then its due to shutdown of rds instance. This will be the case only if rds instance is eating up too many credits
+# This is live currently on crypto.reddragon09.in
 
 #  Automated Crypto Price Predictor Web App (AWS Production Pipeline)
 
