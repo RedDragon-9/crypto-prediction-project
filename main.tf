@@ -187,12 +187,14 @@ resource "aws_db_instance" "mysql_db" {
   allocated_storage      = 20
   max_allocated_storage  = 20
   engine                 = "mysql"
-  engine_version         = "8.0"
+  engine_version         = "8.4.11"
   instance_class         = "db.t3.micro"
   db_name                = "bitcoin"
   username               = "db_master_admin"
   password               = random_password.db_password.result
-  parameter_group_name   = "default.mysql8.0"
+  parameter_group_name   = "default.mysql8.4"
+  allow_major_version_upgrade = true 
+  apply_immediately      = true 
   skip_final_snapshot    = true
   publicly_accessible    = false
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name

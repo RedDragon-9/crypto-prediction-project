@@ -1,5 +1,6 @@
 # This is live currently on crypto.reddragon09.in
 
+
 #  Automated Crypto Price Predictor Web App (AWS Production Pipeline)
 
 DevOps implementation of a **Python/Flask** Machine Learning application that forecasts **Bitcoin and Ethereum** prices. This project uses **Terraform** for Infrastructure as Code (IaC) to dynamically provision and manage hidden cloud architecture in the **AWS Stockholm (`eu-north-1`) region**.
@@ -22,7 +23,7 @@ DevOps implementation of a **Python/Flask** Machine Learning application that fo
 * Unique S3 bucket name
  
 ### 2. Configure GitHub Secrets
-Fork or copy this repository, navigate to **Settings ➡️ Secrets and variables ➡️ Actions**, and add these **4 Encrypted Secrets** to repository secrets:
+Clone or pull this repository to a local repository, navigate to **Settings ➡️ Secrets and variables ➡️ Actions**, and add these **4 Encrypted Secrets** to repository secrets:
 * `AWS_ACCESS_KEY_ID` - Your programmatic IAM access ID string.
 * `AWS_SECRET_ACCESS_KEY` - Your matching programmatic secret access key.
 * `MY_ROOT_DOMAIN` - Your base hosted zone domain name (e.g., `mydomain.com`).
@@ -33,7 +34,7 @@ Fork or copy this repository, navigate to **Settings ➡️ Secrets and variable
 * Go to .github/workflows/deploy.yml file and change the bucket name in the Remote state storage section (step 4) to the same name used in main.tf.
 
 ### 4. Push and Launch!
-Once your secrets are added, push your project modifications to the main branch:
+Once your secrets are added, push your project modifications to the main branch of your repository:
 ```bash
 git add .
 git commit -m "intial message"
